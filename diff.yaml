@@ -1,0 +1,132 @@
+cpus: 0
+image: mosaicml/pytorch:2.1.0_cu121-python3.10-ubuntu20.04
+run_id: ""
+command: >-
+  cd llm-foundry-ayush/scripts
+    # python -m pip install awscli
+    # mkdir local_python
+    # aws s3 cp s3://test-foundation-model/data-v2/redpajama-1b/ local_python --recursive 
+
+    # python data_prep/convert_dataset_hf.py --dataset local_python --out_root s3://agi-model/python_mds_shards/ \
+    # --splits train_small val_small --concat_tokens 2048 --tokenizer meta-llama/Llama-2-7b-hf \
+    # --eos_text '</s>'
+    
+    composer train/train.py train/yamls/pretrain/llama.yaml \
+    data_remote=s3://agi-model/pajama_mds_shards/ train_loader.dataset.split=train \
+    eval_loader.dataset.split=val max_duration=1000ba \
+    eval_interval=0 save_folder=s3://agi-model/{run_name}/checkpoints
+compute:
+  gpus: 8
+  cluster: r12z3
+run_name: llama-1-7b
+metadata: {}
+entrypoint: ""
+parameters:
+  seed: ${global_seed}
+  model:
+    name: hf_causal_lm
+    pretrained: false
+    use_auth_token: true
+    config_overrides:
+      use_cache: true
+      hidden_act: silu
+      rope_theta: 10000
+      vocab_size: 32000
+      hidden_size: 2048
+      bos_token_id: 1
+      eos_token_id: 2
+      pad_token_id: 2
+      rms_norm_eps: 0.000001
+      attention_bias: false
+      pretraining_tp: 1
+      initializer_range: 0.02
+      intermediate_size: 8192
+      num_hidden_layers: 24
+      num_attention_heads: 32
+      num_key_value_heads: 32
+      tie_word_embeddings: false
+      max_position_embeddings: 2048
+    pretrained_model_name_or_path: meta-llama/Llama-2-7b-hf
+  run_name: llama-1-7b-s3
+  callbacks:
+    lr_monitor: {}
+    speed_monitor:
+      window_size: 10
+    memory_monitor: {}
+    runtime_estimator: {}
+  optimizer:
+    lr: 0.0001
+    eps: 1e-8
+    name: decoupled_adamw
+    betas:
+      "0": 0.9
+      "1": 0.95
+    weight_decay: 0.0001
+  precision: amp_bf16
+  scheduler:
+    name: cosine_with_warmup
+    alpha_f: 0.1
+    t_warmup: 100ba
+  tokenizer:
+    name: ${tokenizer_name}
+    kwargs:
+      model_max_length: ${max_seq_len}
+  algorithms:
+    gradient_clipping:
+      clipping_type: norm
+      clipping_threshold: 1
+  eval_first: false
+  data_remote: s3://agi-model/pajama_mds_shards/
+  eval_loader:
+    name: text
+    dataset:
+      local: ${data_local}
+      split: val
+      remote: ${data_remote}
+      shuffle: false
+      max_seq_len: ${max_seq_len}
+      shuffle_seed: ${global_seed}
+    drop_last: false
+    num_workers: 8
+  fsdp_config:
+    verbose: false
+    mixed_precision: PURE
+    limit_all_gathers: true
+    sharding_strategy: FULL_SHARD
+    activation_cpu_offload: false
+    activation_checkpointing: false
+    activation_checkpointing_reentrant: false
+  global_seed: 17
+  max_seq_len: 2048
+  max_duration: 33696ba
+  progress_bar: false
+  train_loader:
+    name: text
+    dataset:
+      local: ${data_local}
+      split: train
+      remote: ${data_remote}
+      shuffle: true
+      max_seq_len: ${max_seq_len}
+      shuffle_seed: ${global_seed}
+    drop_last: true
+    num_workers: 8
+  eval_interval: 1000ba
+  log_to_console: true
+  tokenizer_name: meta-llama/Llama-2-7b-hf
+  console_log_interval: 1ba
+  device_eval_batch_size: 1
+  eval_subset_num_batches: -1
+  global_train_batch_size: 1000
+  device_train_microbatch_size: 1
+parent_name: null
+scheduling: {}
+env_variables: {}
+integrations:
+  "0":
+    type: git_repo
+    params:
+      git_repo: ayush-vatsal/llm-foundry-ayush
+      git_branch: main
+      pip_install: -e .[gpu]
+dependent_deployment: {}
