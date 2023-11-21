@@ -3,17 +3,17 @@ image: mosaicml/pytorch:2.1.0_cu121-python3.10-ubuntu20.04
 run_id: ""
 command: >-
   cd llm-foundry-ayush/scripts
-    # python -m pip install awscli
-    # mkdir local_python
-    # aws s3 cp s3://test-foundation-model/data-v2/redpajama-1b/ local_python --recursive 
+   # python -m pip install awscli
+   # mkdir redpajama_local
+   # aws s3 cp s3://agi-model/datav1/ redpajama_local --recursive
 
-    # python data_prep/convert_dataset_hf.py --dataset local_python --out_root s3://agi-model/python_mds_shards/ \
-    # --splits train_small val_small --concat_tokens 2048 --tokenizer meta-llama/Llama-2-7b-hf \
-    # --eos_text '</s>'
-    
-    composer train/train.py train/yamls/pretrain/llama.yaml \
-    data_remote=s3://agi-model/pajama_mds_shards/ train_loader.dataset.split=train \
-    eval_loader.dataset.split=val max_duration=1000ba \
+   # python data_prep/convert_dataset_hf.py --dataset redpajama_local --out_root s3://agi-model/redpajama_local_mds_shards/ \
+   # --splits train val --concat_tokens 2048 --tokenizer meta-llama/Llama-2-7b-hf \
+   # --eos_text '</s>'
+
+    composer train/train.py train/yamls/pretrain/llama_1.7b.yaml \
+    data_remote=s3://agi-model/redpajama_local_mds_shards/ train_loader.dataset.split=train \
+    eval_loader.dataset.split=val max_duration=1ep \
     eval_interval=0 save_folder=s3://agi-model/{run_name}/checkpoints
 compute:
   gpus: 8
@@ -47,7 +47,7 @@ parameters:
       tie_word_embeddings: false
       max_position_embeddings: 2048
     pretrained_model_name_or_path: meta-llama/Llama-2-7b-hf
-  run_name: llama-1-7b-s3
+  run_name: llama-1-7b-red
   callbacks:
     lr_monitor: {}
     speed_monitor:
@@ -76,7 +76,7 @@ parameters:
       clipping_type: norm
       clipping_threshold: 1
   eval_first: false
-  data_remote: s3://agi-model/pajama_mds_shards/
+  data_remote: s3://agi-model/redpajama_local_mds_shards/
   eval_loader:
     name: text
     dataset:
@@ -96,7 +96,7 @@ parameters:
     activation_cpu_offload: false
     activation_checkpointing: false
     activation_checkpointing_reentrant: false
-  global_seed: 17
+  global_seed: 42
   max_seq_len: 2048
   max_duration: 33696ba
   progress_bar: false
@@ -111,7 +111,7 @@ parameters:
       shuffle_seed: ${global_seed}
     drop_last: true
     num_workers: 8
-  eval_interval: 1000ba
+  eval_interval: 100ba
   log_to_console: true
   tokenizer_name: meta-llama/Llama-2-7b-hf
   console_log_interval: 1ba
